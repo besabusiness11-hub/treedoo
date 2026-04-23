@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Hexagon, Building, ArrowRight, User, Briefcase, Sprout, Sparkles, Camera, Loader2, CheckCircle2 } from "lucide-react"
+import { Hexagon, Building, ArrowRight, User, Briefcase, Sprout, Sparkles, Camera, Loader2, CheckCircle2, MapPin } from "lucide-react"
 import { motion, AnimatePresence } from "motion/react"
 
 export default function Welcome() {
@@ -11,6 +11,7 @@ export default function Welcome() {
   const [showDoo, setShowDoo] = useState(false)
   const [role, setRole] = useState<"tree" | "admin" | null>(null)
   const [obStep, setObStep] = useState<"upload" | "analyzing" | "confirm">("upload")
+  const [locationStatus, setLocationStatus] = useState<"idle" | "loading" | "granted" | "denied">("idle")
 
   // Auto-transition from splash to meaning after the logo animation builds impact
   useEffect(() => {
@@ -32,14 +33,42 @@ export default function Welcome() {
      setTimeout(() => setObStep("confirm"), 2500)
   }
 
+  const requestLocation = () => {
+    setLocationStatus("loading")
+    if (!navigator.geolocation) {
+      setLocationStatus("denied")
+      return
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        localStorage.setItem('treedoo_location', JSON.stringify({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+          timestamp: Date.now()
+        }))
+        setLocationStatus("granted")
+      },
+      () => {
+        setLocationStatus("denied")
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    )
+  }
+
   const handleComplete = () => {
-     let userName = "Utente";
+     let userName = "";
      if (role === "tree") {
        const el = document.getElementById("user-name-input") as HTMLInputElement;
-       userName = el ? el.value : "Laura Rossi";
+       userName = el ? el.value.trim() : "";
      } else {
        const el = document.getElementById("admin-name-input") as HTMLInputElement;
-       userName = el ? el.value : "Studio Amministrazioni Rossi";
+       userName = el ? el.value.trim() : "";
+     }
+     if (!userName) {
+       // Focus sull'input se il nome è vuoto
+       const inputId = role === "tree" ? "user-name-input" : "admin-name-input";
+       document.getElementById(inputId)?.focus();
+       return;
      }
      localStorage.setItem('treedoo_user', JSON.stringify({ role, name: userName }));
 
@@ -49,7 +78,7 @@ export default function Welcome() {
 
   return (
     <div 
-      className="flex flex-col min-h-[100dvh] bg-gradient-to-b from-blue-200 via-white to-gray-50 w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto shadow-2xl relative overflow-hidden"
+      className="flex flex-col min-h-[100dvh] bg-gradient-to-b from-[#f0fdf4] to-white w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto shadow-2xl relative overflow-hidden"
       onClick={() => step === "splash" && setStep("meaning")}
     >
       {/* Top Content Area - Responsive Flex Shift */}
@@ -61,44 +90,37 @@ export default function Welcome() {
         }`}
       >
         <motion.div layoutId="title" className="space-y-4 flex flex-col items-center justify-center text-slate-900 w-full mt-10">
-          <div className="flex items-baseline justify-center overflow-visible">
+          <div className="flex items-center justify-center overflow-visible gap-0">
             <motion.div 
               layout 
-              initial={{ scale: 0, opacity: 0, rotate: -20 }}
-              animate={{ scale: 1, opacity: 1, rotate: 0 }}
-              transition={{ type: "spring", stiffness: 200, damping: 10, mass: 1 }}
-              className="text-[4rem] font-extrabold tracking-tight leading-none drop-shadow-sm text-slate-900 z-10"
+              initial={{ x: -20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ type: "spring", stiffness: 200, damping: 20 }}
+              className="text-[4.5rem] font-bold tracking-tightest leading-none text-slate-900"
             >
-              TREE
+              tree
             </motion.div>
-            <AnimatePresence>
+            <AnimatePresence mode="wait">
               {showDoo && (
                 <motion.div
-                  initial={{ y: -500, opacity: 0, rotate: 120, scale: 0.3 }}
-                  animate={{ y: 0, opacity: 1, rotate: -4, scale: 1 }}
-                  transition={{ type: "spring", stiffness: 180, damping: 8, mass: 1.2 }}
-                  className="text-[4rem] font-extrabold tracking-tight leading-none drop-shadow-2xl text-blue-600 origin-bottom-right z-20"
+                  initial={{ y: 20, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 200, damping: 20 }}
+                  className="text-[4.5rem] font-bold tracking-tightest leading-none text-emerald-500 relative flex items-baseline"
                 >
-                  DOO
+                  doo
+                  <motion.span 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="w-4 h-4 bg-emerald-500 rounded-full ml-2 mb-2" 
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
           
-          <div className="h-6 flex items-center justify-center">
-            <AnimatePresence>
-              {step === "splash" && showDoo && (
-                <motion.p
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ delay: 0.5, duration: 0.8 }}
-                  className="text-emerald-700 font-medium tracking-wide text-[13px] flex items-center justify-center gap-1.5 opacity-80"
-                >
-                  <Sparkles className="w-4 h-4" /> L'ecosistema intelligente
-                </motion.p>
-              )}
-            </AnimatePresence>
+          <div className="h-8 flex items-center justify-center mt-2">
           </div>
         </motion.div>
       </motion.div>
@@ -323,47 +345,78 @@ export default function Welcome() {
                             <div className="bg-white p-1 rounded-full shadow-sm">
                               <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-500" />
                             </div>
-                            <p className="text-xs font-bold leading-tight flex-1">Anagrafica popolata dall'AI. Modifica se necessario.</p>
+                            <p className="text-xs font-bold leading-tight flex-1">Compila i tuoi dati reali per iniziare.</p>
                           </div>
 
                           <div className="space-y-4 overflow-y-auto pb-24 px-1">
                             {role === "tree" ? (
                               <>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] font-extrabold text-slate-400 px-1 uppercase tracking-widest">Nome e Cognome</label>
-                                  <input id="user-name-input" type="text" defaultValue="Laura Rossi" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-emerald-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all" />
+                                  <label className="text-[10px] font-extrabold text-slate-400 px-1 uppercase tracking-widest">Nome e Cognome *</label>
+                                  <input id="user-name-input" type="text" placeholder="es. Marco Bianchi" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-emerald-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all" />
                                 </div>
                                 <div className="space-y-1.5">
                                   <label className="text-[10px] font-extrabold text-slate-400 px-1 uppercase tracking-widest">Residenza Condominiale</label>
-                                  <input type="text" defaultValue="Via della Repubblica 42, Milano" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-emerald-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all" />
+                                  <input type="text" placeholder="es. Via Garibaldi 15, Roma" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-emerald-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all" />
                                 </div>
                                 <div className="flex gap-3">
                                   <div className="space-y-1.5 flex-1">
                                     <label className="text-[10px] font-extrabold text-slate-400 px-1 uppercase tracking-widest">Scala</label>
-                                    <input type="text" defaultValue="B" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-emerald-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all text-center" />
+                                    <input type="text" placeholder="es. A" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-emerald-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all text-center" />
                                   </div>
                                   <div className="space-y-1.5 flex-1">
                                     <label className="text-[10px] font-extrabold text-slate-400 px-1 uppercase tracking-widest">Interno</label>
-                                    <input type="text" defaultValue="4" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-emerald-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all text-center" />
+                                    <input type="text" placeholder="es. 3" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-emerald-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all text-center" />
                                   </div>
                                 </div>
                               </>
                             ) : (
                               <>
                                 <div className="space-y-1.5">
-                                  <label className="text-[10px] font-extrabold text-slate-400 px-1 uppercase tracking-widest">Nome Studio</label>
-                                  <input id="admin-name-input" type="text" defaultValue="Studio Amministrazioni Rossi" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-blue-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all" />
+                                  <label className="text-[10px] font-extrabold text-slate-400 px-1 uppercase tracking-widest">Nome Studio *</label>
+                                  <input id="admin-name-input" type="text" placeholder="es. Studio Amm. Verdi & Associati" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-blue-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all" />
                                 </div>
                                 <div className="space-y-1.5">
                                   <label className="text-[10px] font-extrabold text-slate-400 px-1 uppercase tracking-widest">Partita IVA</label>
-                                  <input type="text" defaultValue="IT12345678901" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-blue-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all" />
+                                  <input type="text" placeholder="es. IT01234567890" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-blue-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all" />
                                 </div>
                                 <div className="space-y-1.5">
                                   <label className="text-[10px] font-extrabold text-slate-400 px-1 uppercase tracking-widest">Codice ANACI</label>
-                                  <input type="text" defaultValue="14562" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-blue-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all" />
+                                  <input type="text" placeholder="es. 12345" className="w-full h-12 bg-gray-50 border border-gray-100 focus:border-blue-500 focus:bg-white focus:shadow-sm rounded-xl px-4 font-bold text-slate-800 outline-none transition-all" />
                                 </div>
                               </>
                             )}
+
+                            {/* Geolocalizzazione */}
+                            <div className="space-y-1.5 mt-2">
+                              <label className="text-[10px] font-extrabold text-slate-400 px-1 uppercase tracking-widest flex items-center gap-1">
+                                <MapPin className="w-3 h-3" /> Posizione
+                              </label>
+                              {locationStatus === "idle" && (
+                                <button
+                                  type="button"
+                                  onClick={requestLocation}
+                                  className="w-full h-12 bg-blue-50 border border-blue-100 rounded-xl px-4 font-bold text-blue-700 text-sm flex items-center justify-center gap-2 hover:bg-blue-100 transition-colors"
+                                >
+                                  <MapPin className="w-4 h-4" /> Attiva posizione per servizi locali
+                                </button>
+                              )}
+                              {locationStatus === "loading" && (
+                                <div className="w-full h-12 bg-blue-50 border border-blue-100 rounded-xl px-4 flex items-center justify-center gap-2 text-sm text-blue-600 font-medium">
+                                  <Loader2 className="w-4 h-4 animate-spin" /> Localizzazione in corso...
+                                </div>
+                              )}
+                              {locationStatus === "granted" && (
+                                <div className="w-full h-12 bg-emerald-50 border border-emerald-100 rounded-xl px-4 flex items-center justify-center gap-2 text-sm text-emerald-700 font-bold">
+                                  <CheckCircle2 className="w-4 h-4" /> Posizione attiva — servizi locali abilitati
+                                </div>
+                              )}
+                              {locationStatus === "denied" && (
+                                <div className="w-full h-12 bg-amber-50 border border-amber-100 rounded-xl px-4 flex items-center justify-center gap-2 text-sm text-amber-700 font-medium">
+                                  Posizione non disponibile — i servizi locali saranno limitati
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           <div className="absolute bottom-4 left-0 right-0 pt-4 bg-white">

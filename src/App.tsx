@@ -7,7 +7,22 @@ import TicketForm from "./pages/condomino/TicketForm"
 import SocialHub from "./pages/condomino/SocialHub"
 import AdminDashboard from "./pages/admin/Dashboard"
 import Bollette from "./pages/condomino/Bollette"
+import Bilancio from "./pages/condomino/Bilancio"
+import Regolamento from "./pages/condomino/Regolamento"
+import Verbali from "./pages/condomino/Verbali"
 import { cn } from "./lib/utils"
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+    const main = document.querySelector('main');
+    if (main) main.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
 
 function MainLayout() {
   const location = useLocation()
@@ -22,8 +37,8 @@ function MainLayout() {
       <nav className="fixed bottom-0 w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto bg-white border-t border-gray-200 pb-safe pt-2 px-6 flex justify-between items-center shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-20 rounded-t-2xl">
         <NavItem to="/dashboard" icon={<Home />} label="Home" active={location.pathname === "/dashboard"} />
         <NavItem to="/social" icon={<Users />} label="Vicinato" active={location.pathname === "/social"} />
-        <NavItem to="/ticket" icon={<ClipboardList />} label="Ticket" active={location.pathname === "/ticket"} />
         <NavItem to="/bollette" icon={<FileTextIcon />} label="Bollette" active={location.pathname === "/bollette"} />
+        <NavItem to="/ticket" icon={<ClipboardList />} label="Ticket" active={location.pathname === "/ticket"} />
       </nav>
     </div>
   )
@@ -37,11 +52,12 @@ function FileTextIcon() {
 
 function NavItem({ to, icon, label, active }: { to: string, icon: React.ReactNode, label: string, active: boolean }) {
   return (
-    <Link to={to} className={cn("flex flex-col items-center gap-1 p-2 text-gray-400 hover:text-blue-900 transition-colors", active && "text-blue-900")}>
-      <div className={cn("[&>svg]:w-6 [&>svg]:h-6", active && "[&>svg]:fill-blue-100")}>
-        {icon}
+    <Link to={to} className={`flex flex-col items-center gap-1 p-2 transition-all ${active ? "text-[#1a3322] -translate-y-1" : "text-gray-400 hover:text-gray-600"}`}>
+      <div className={`relative ${active ? "animate-in zoom-in-50 duration-300" : ""}`}>
+        {React.cloneElement(icon as React.ReactElement, { className: `w-6 h-6 ${active ? "drop-shadow-md" : ""}` })}
+        {active && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#4ade80] rounded-full border border-white shadow-[0_0_8px_rgba(74,222,128,0.5)]" />}
       </div>
-      <span className="text-[10px] font-medium">{label}</span>
+      <span className={`text-[10px] font-bold ${active ? "opacity-100" : "opacity-0 h-0 overflow-hidden"}`}>{label}</span>
     </Link>
   )
 }
@@ -49,6 +65,7 @@ function NavItem({ to, icon, label, active }: { to: string, icon: React.ReactNod
 export default function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<Welcome />} />
         
@@ -58,6 +75,9 @@ export default function App() {
           <Route path="/ticket" element={<TicketForm />} />
           <Route path="/social" element={<SocialHub />} />
           <Route path="/bollette" element={<Bollette />} />
+          <Route path="/bilancio" element={<Bilancio />} />
+          <Route path="/regolamento" element={<Regolamento />} />
+          <Route path="/verbali" element={<Verbali />} />
         </Route>
 
         {/* Admin Route */}

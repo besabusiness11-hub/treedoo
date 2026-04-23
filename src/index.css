@@ -1,7 +1,30 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Outfit", sans-serif;
+}
+
 @layer base {
-  body {
-    @apply bg-gray-50 text-slate-900 font-sans antialiased;
+  * {
+    font-family: 'Outfit', sans-serif !important;
   }
+  body {
+    @apply bg-slate-50 text-slate-900;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    touch-action: pan-x pan-y;
+  }
+}
+
+/* Scrollbar Invisibile ma scroll fluido (UI app-like) */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}
+* {
+  scrollbar-width: none; 
+  -ms-overflow-style: none; /* IE and Edge */
+}
+html {
+  scroll-behavior: smooth;
 }
