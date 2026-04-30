@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { FileUp, Sparkles, TrendingDown, Bolt, AlertTriangle, RefreshCw, Loader2, CheckCircle2, ReceiptText } from "lucide-react"
+import { ollamaService } from "@/lib/ollama"
 
 type ConsumoEntry = { name: string; consumo: number };
 
@@ -38,41 +39,53 @@ export default function Bollette() {
     fileInputRef.current?.click();
   };
 
-  const onFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [ocrError, setOcrError] = useState<string | null>(null);
+
+  const onFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    
+
     setUploadedFile(file.name);
     setUploadStep("uploading");
+    setOcrError(null);
 
-    // Simula l'analisi OCR del file e genera dati realistici basati sul nome file
-    setTimeout(() => {
-      // Aggiungi un datapoint basato sulla data corrente
-      const now = new Date();
-      const monthName = now.toLocaleDateString('it-IT', { month: 'short' }).replace('.', '');
-      const capitalizedMonth = monthName.charAt(0).toUpperCase() + monthName.slice(1);
-      
-      // Genera un valore ragionevole tra 100 e 400
-      const consumoValue = Math.floor(Math.random() * 200) + 150;
-      
-      setData(prev => {
-        const existing = prev.find(d => d.name === capitalizedMonth);
-        if (existing) {
-          return prev.map(d => d.name === capitalizedMonth ? { ...d, consumo: consumoValue } : d);
-        }
-        return [...prev, { name: capitalizedMonth, consumo: consumoValue }];
+    try {
+      // Convert to base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
-      
-      setUploadStep("done");
-      
-      // Reset dopo 3 secondi
-      setTimeout(() => {
-        setUploadStep("idle");
-        setUploadedFile(null);
-      }, 3000);
-    }, 2500);
 
-    // Reset l'input per permettere ri-selezione dello stesso file
+      const mimeType = file.type || 'image/jpeg';
+      const result = await ollamaService.analyzeBolletta(base64, mimeType);
+
+      const now = new Date();
+      // Use periodo from OCR or fall back to current month
+      let monthLabel = now.toLocaleDateString('it-IT', { month: 'short' }).replace('.', '');
+      if (result.periodo) monthLabel = result.periodo;
+      const capitalizedMonth = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
+
+      // Use extracted consumo kWh, or importo as proxy, or show error
+      const consumoValue = result.consumo ?? result.importo;
+      if (consumoValue === null) {
+        setOcrError("OCR non ha estratto dati dalla bolletta. Riprova con un'immagine più nitida.");
+        setUploadStep("idle");
+      } else {
+        setData(prev => {
+          const existing = prev.find(d => d.name === capitalizedMonth);
+          if (existing) return prev.map(d => d.name === capitalizedMonth ? { ...d, consumo: consumoValue } : d);
+          return [...prev, { name: capitalizedMonth, consumo: consumoValue }];
+        });
+        setUploadStep("done");
+        setTimeout(() => { setUploadStep("idle"); setUploadedFile(null); }, 3000);
+      }
+    } catch (err) {
+      setOcrError("Errore durante l'analisi OCR. Controlla la connessione o la chiave API.");
+      setUploadStep("idle");
+    }
+
     e.target.value = '';
   };
 
@@ -162,9 +175,16 @@ export default function Bollette() {
             onChange={onFileSelected}
           />
 
+          {ocrError && (
+            <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              {ocrError}
+            </div>
+          )}
+
           {uploadStep === "idle" && (
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="w-full border-dashed border-2 hover:bg-blue-50 border-blue-200 text-blue-700 h-12 flex gap-2"
               onClick={handleFileUpload}
             >

@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Users, MapPin, ShoppingBag, Newspaper, ChevronRight, ChevronDown, ChevronUp, Sparkles, AlertTriangle, TrendingUp, Loader2, Navigation, Send, ShieldAlert, LocateFixed } from "lucide-react"
 import { useLocation } from "react-router-dom"
 import { useData } from "@/lib/DataContext"
+import { useAuth } from "@/lib/AuthContext"
 import { ollamaService } from "@/lib/ollama"
 import { containsBannedWords, filterBannedWords } from "@/lib/DataContext"
 
@@ -35,7 +36,7 @@ export default function SocialHub() {
   const [showNeighborhood, setShowNeighborhood] = useState(false)
   const [showLocali, setShowLocali] = useState(false)
   
-  const [dbUser, setDbUser] = useState<any>(null);
+  const { user: dbUser } = useAuth();
   const [hasLocation, setHasLocation] = useState(false);
   const [userZona, setUserZona] = useState<string | null>(null);
   const [locationRequesting, setLocationRequesting] = useState(false);
@@ -58,8 +59,6 @@ export default function SocialHub() {
   }, [loc]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('treedoo_user');
-    if (saved) setDbUser(JSON.parse(saved));
     
     // Controlla posizione salvata
     const savedLoc = localStorage.getItem('treedoo_location');
@@ -158,10 +157,11 @@ export default function SocialHub() {
   const [localiError, setLocaliError] = useState<string | null>(null);
   const [locali, setLocali] = useState<LocaleNearby[]>([]);
   const [localiCategory, setLocaliCategory] = useState<string>("all");
+  const [localiSearch, setLocaliSearch] = useState<string>("");
 
-  // Rete Quartiere states
-  const [neighborhoodLoading, setNeighborhoodLoading] = useState(false);
-  const [neighborhoodPatterns, setNeighborhoodPatterns] = useState<{title: string, desc: string, count: number, severity: "alto" | "medio" | "basso"}[]>([]);
+  // Notizie Locali states
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [localNews, setLocalNews] = useState<{title: string, content: string, date: string}[]>([]);
 
   const handleGenerateMarket = async () => {
     if (!marketInput) return;
@@ -220,7 +220,7 @@ export default function SocialHub() {
     });
   };
 
-  const fetchLocali = async () => {
+  const fetchLocali = async (searchQuery?: string) => {
     setLocaliLoading(true);
     setLocaliError(null);
     setLocali([]);
@@ -244,7 +244,12 @@ export default function SocialHub() {
     }
     try {
       const radius = 800;
-      const query = `[out:json][timeout:10];(node["amenity"~"restaurant|cafe|bar|pharmacy|bank|supermarket|post_office"](around:${radius},${lat},${lng});node["shop"~"supermarket|convenience|bakery|butcher|greengrocer"](around:${radius},${lat},${lng}););out body 20;`;
+      let query = '';
+      if (searchQuery) {
+        query = `[out:json][timeout:10];(node["name"~"${searchQuery}",i](around:3000,${lat},${lng});node["amenity"~"${searchQuery}",i](around:3000,${lat},${lng});node["shop"~"${searchQuery}",i](around:3000,${lat},${lng}););out body 20;`;
+      } else {
+        query = `[out:json][timeout:10];(node["amenity"~"restaurant|cafe|bar|pharmacy|bank|supermarket|post_office"](around:${radius},${lat},${lng});node["shop"~"supermarket|convenience|bakery|butcher|greengrocer"](around:${radius},${lat},${lng}););out body 20;`;
+      }
       const res = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST', body: `data=${encodeURIComponent(query)}`,
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
@@ -274,26 +279,17 @@ export default function SocialHub() {
     finally { setLocaliLoading(false); }
   };
 
-  const fetchNeighborhoodPatterns = () => {
-    setNeighborhoodLoading(true);
-    setNeighborhoodPatterns([]);
-    const openTickets = data.tickets.filter(t => t.status === 'open');
-    const allTickets = data.tickets;
-    setTimeout(() => {
-      const patterns: typeof neighborhoodPatterns = [];
-      if (allTickets.length === 0) { setNeighborhoodPatterns([]); setNeighborhoodLoading(false); return; }
-      const typeGroups: Record<string, number> = {};
-      allTickets.forEach(t => { typeGroups[t.type] = (typeGroups[t.type] || 0) + 1; });
-      Object.entries(typeGroups).forEach(([type, count]) => {
-        if (count >= 2) {
-          const typeNames: Record<string, string> = { idraulico: "Problematica Idraulica Ricorrente", elettrico: "Anomalia Impianto Elettrico", strutturale: "Criticità Strutturale", altro: "Segnalazioni Multiple" };
-          patterns.push({ title: typeNames[type] || `Segnalazioni ${type}`, desc: `Rilevati ${count} ticket di tipo "${type}" nella tua zona. L'aggregazione dei dati suggerisce un possibile problema condiviso.`, count, severity: count >= 4 ? "alto" : "medio" });
-        }
-      });
-      if (openTickets.length >= 3) patterns.push({ title: "Volume Elevato Segnalazioni Aperte", desc: `${openTickets.length} ticket aperti nel condominio. Si consiglia all'amministratore di pianificare un intervento cumulativo.`, count: openTickets.length, severity: openTickets.length >= 5 ? "alto" : "medio" });
-      setNeighborhoodPatterns(patterns);
-      setNeighborhoodLoading(false);
-    }, 1500);
+  const fetchLocalNews = async () => {
+    if (!userZona) return;
+    setNewsLoading(true);
+    try {
+      const news = await ollamaService.generateLocalNews(userZona);
+      setLocalNews(news);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setNewsLoading(false);
+    }
   };
 
   const bachecaPosts = data.posts.filter(p => !p.isAvviso);
@@ -552,9 +548,21 @@ export default function SocialHub() {
                </div>
             </div>
             
-            <div onClick={() => { setShowNeighborhood(true); fetchNeighborhoodPatterns(); }}>
+            <div onClick={() => { 
+              if (!hasLocation) {
+                setShowLocationPrompt("locali");
+              } else {
+                setShowNeighborhood(true); 
+                fetchLocalNews(); 
+              }
+            }}>
               <Card className="rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
-                <CardContent className="p-5 flex items-center justify-between">
+                <CardContent className="p-5 flex items-center justify-between relative">
+                   {!hasLocation && (
+                     <div className="absolute top-3 right-3 bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-0.5">
+                        <LocateFixed className="w-2 h-2" /> GPS
+                     </div>
+                   )}
                    <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center relative">
                       <Newspaper className="text-amber-600 w-6 h-6" />
@@ -563,8 +571,8 @@ export default function SocialHub() {
                       </div>
                     </div>
                     <div>
-                      <h4 className="font-bold text-[15px] text-slate-800">Rete di Quartiere</h4>
-                      <p className="text-xs text-slate-500 mt-0.5">Pattern Detection</p>
+                      <h4 className="font-bold text-[15px] text-slate-800">Notizie Locali</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">News dal Comune/Quartiere</p>
                     </div>
                    </div>
                    <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-amber-500 transition-colors" />
@@ -586,6 +594,19 @@ export default function SocialHub() {
                  <h2 className="text-lg font-bold text-slate-900">Locali e Servizi in Zona</h2>
               </div>
               <button onClick={() => setShowLocali(false)} className="text-gray-400 hover:text-gray-600 bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center font-bold">✕</button>
+            </div>
+            
+            <div className="mb-4">
+               <form onSubmit={(e) => { e.preventDefault(); fetchLocali(localiSearch); }} className="flex gap-2 h-12">
+                 <input 
+                   type="text" 
+                   placeholder="Cerca pizzeria, farmacia, idraulico..." 
+                   value={localiSearch} 
+                   onChange={(e) => setLocaliSearch(e.target.value)} 
+                   className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 text-sm outline-none focus:border-[#1a3322] focus:bg-white transition-colors" 
+                 />
+                 <button type="submit" className="bg-[#1a3322] text-white px-5 rounded-xl text-sm font-bold hover:bg-[#1a3322]/90 shadow-sm transition-all">Cerca</button>
+               </form>
             </div>
             {localiLoading ? (
               <div className="flex-1 flex flex-col items-center justify-center py-12">
@@ -681,48 +702,44 @@ export default function SocialHub() {
         </div>
       )}
 
-      {/* AI Rete Quartiere Modal */}
+      {/* AI Notizie Locali Modal */}
       {showNeighborhood && (
         <div className="fixed inset-0 z-50 flex items-end bg-[#0b1b3d]/40 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white w-full md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto rounded-t-[2.5rem] p-6 pb-12 shadow-2xl animate-in slide-in-from-bottom-8 max-h-[85vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <div className="flex items-center gap-2">
                  <div className="p-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-lg text-white"><Sparkles className="w-4 h-4" /></div>
-                 <h2 className="text-lg font-bold text-slate-900">AI Pattern Detection</h2>
+                 <h2 className="text-lg font-bold text-slate-900">Notizie da {userZona}</h2>
               </div>
               <button onClick={() => setShowNeighborhood(false)} className="text-gray-400 hover:text-gray-600 bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center font-bold">✕</button>
             </div>
             <div className="space-y-4">
-              <p className="text-sm text-slate-500 leading-relaxed">L'Intelligenza Artificiale aggrega i ticket della zona per rilevare pattern ricorrenti.</p>
-              {neighborhoodLoading ? (
+              <p className="text-sm text-slate-500 leading-relaxed">Le ultime notizie e aggiornamenti locali rilevati dall'IA per la tua zona.</p>
+              {newsLoading ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Loader2 className="w-8 h-8 text-amber-500 animate-spin mb-3" />
-                  <p className="text-sm text-slate-600 font-medium">Analisi dei pattern in corso...</p>
+                  <p className="text-sm text-slate-600 font-medium">Ricerca notizie locali in corso...</p>
                 </div>
-              ) : neighborhoodPatterns.length === 0 ? (
+              ) : localNews.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center mb-4"><TrendingUp className="w-8 h-8 text-emerald-400" /></div>
-                  <h3 className="font-bold text-slate-800 text-lg">Tutto nella norma</h3>
+                  <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-4"><Newspaper className="w-8 h-8 text-gray-400" /></div>
+                  <h3 className="font-bold text-slate-800 text-lg">Nessuna notizia</h3>
                   <p className="text-sm text-slate-500 mt-2 max-w-[280px]">
-                    {data.tickets.length === 0 ? "Non ci sono ancora ticket nel sistema." : "Nessun pattern anomalo rilevato."}
+                    Al momento non ci sono novità rilevanti per il tuo quartiere.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {neighborhoodPatterns.map((pattern, i) => {
-                    const sev = { alto: { bg: "bg-red-50", border: "border-red-200", text: "text-red-800", badge: "bg-red-100 text-red-800", icon: "text-red-500" }, medio: { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-800", badge: "bg-amber-100 text-amber-800", icon: "text-amber-500" }, basso: { bg: "bg-blue-50", border: "border-blue-200", text: "text-blue-800", badge: "bg-blue-100 text-blue-800", icon: "text-blue-500" } };
-                    const c = sev[pattern.severity];
-                    return (
-                      <div key={i} className={`${c.bg} border ${c.border} rounded-2xl p-5 relative overflow-hidden`}>
-                        <div className="absolute top-0 right-0 p-4 opacity-10"><AlertTriangle className={`w-24 h-24 ${c.icon}`} /></div>
+                  {localNews.map((news, i) => (
+                      <div key={i} className="bg-amber-50 border border-amber-200 rounded-2xl p-5 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-4 opacity-10"><Newspaper className="w-24 h-24 text-amber-500" /></div>
                         <div className="relative z-10 space-y-3">
-                          <div className={`${c.badge} w-fit px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider`}>Severità: {pattern.severity} — {pattern.count} segnalazioni</div>
-                          <h3 className={`text-xl font-extrabold ${c.text} leading-tight`}>{pattern.title}</h3>
-                          <p className={`text-sm ${c.text} opacity-80 font-medium`}>{pattern.desc}</p>
+                          <div className="bg-amber-100 text-amber-800 w-fit px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider">{news.date}</div>
+                          <h3 className="text-xl font-extrabold text-amber-900 leading-tight">{news.title}</h3>
+                          <p className="text-sm text-amber-800 opacity-80 font-medium">{news.content}</p>
                         </div>
                       </div>
-                    );
-                  })}
+                  ))}
                 </div>
               )}
             </div>

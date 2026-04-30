@@ -3,7 +3,7 @@ export type AIResponse = {
 };
 
 // OpenRouter setup — API key letta da variabile d'ambiente
-const OR_MODEL = 'google/gemma-2-9b-it'; 
+const OR_MODEL = 'google/gemma-3-12b-it:free';
 const OR_KEY = import.meta.env.VITE_OPENROUTER_KEY || '';
 
 async function callAI(prompt: string, system: string): Promise<string> {
@@ -117,6 +117,128 @@ ESEMPIO DI RISPOSTA IDEALE IN JSON:
          desc: "Impossibile contattare l'IA Gemma per generare l'annuncio. Riprovare tra poco.",
          price: "0,00"
        };
+    }
+  },
+
+  async chatWithTreebot(history: { role: 'user' | 'assistant', content: string }[], currentQuery: string): Promise<string> {
+    const system = `Sei "TreeBot", l'assistente virtuale del condominio Treedoo. Sei incaricato di rispondere alle domande dei condomini per conto dell'amministratore.
+    
+REGOLE TASSATIVE:
+1. Sii cortese, professionale ma amichevole. Usa un tono da "maggiordomo digitale".
+2. Conosci le seguenti regole del condominio:
+   - Orari di silenzio: dalle 14:00 alle 16:00 e dalle 22:00 alle 08:00.
+   - Raccolta differenziata: Umido (lunedì e giovedì), Plastica (martedì), Carta (mercoledì), Indifferenziato (venerdì), Vetro (sabato).
+   - Uso piscina/palestra (se presenti): dalle 08:00 alle 21:00.
+   - Spese condominiali: Scadenza 5 di ogni mese.
+3. Se un utente ti fa una richiesta molto specifica, ti chiede di fare un intervento tecnico, si lamenta in modo complesso o ti fa una domanda a cui non sai rispondere usando le regole qui sopra, DEVI rispondere ESATTAMENTE con la stringa "ESCALATION_ADMIN" seguita dalla tua risposta per l'utente, separate da "|||".
+   Esempio: ESCALATION_ADMIN|||Non sono in grado di gestire questa richiesta specifica. Ho appena inviato un resoconto dettagliato all'amministratore, che ti risponderà al più presto.
+4. Mantieni le risposte brevi e dirette (max 2-3 frasi).`;
+
+    const formattedHistory = history.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${OR_KEY}`
+        },
+        body: JSON.stringify({
+          model: OR_MODEL,
+          messages: [
+            { role: 'system', content: system },
+            ...formattedHistory,
+            { role: 'user', content: currentQuery }
+          ]
+        })
+      });
+      
+      if (!res.ok) throw new Error("API error");
+      const data = await res.json();
+      return data.choices[0].message.content;
+    } catch (e) {
+      return "Mi dispiace, i miei server sono momentaneamente offline. Riprova più tardi.";
+    }
+  },
+
+  async generateLocalNews(zona: string): Promise<Array<{ title: string, content: string, date: string }>> {
+    const system = `Sei un reporter giornalistico locale esperto e iper-specializzato.
+Il tuo compito è generare 3 brevi notizie locali ESTREMAMENTE REALISTICHE e contestualizzate per il comune/zona: "${zona}".
+Sfrutta la tua intelligenza e conoscenza reale di "${zona}" per capire esattamente in quale città, provincia o regione si trova. 
+Usa questa conoscenza per nominare vie vere, piazze vere, parchi veri, o istituzioni realmente esistenti in quella precisa area.
+
+REGOLE TASSATIVE:
+1. Rispondi SOLO in formato JSON valido, senza backticks o intro.
+2. Formato: [{"title": "...", "content": "...", "date": "Oggi"}]
+3. Le notizie devono sembrare verissime e attuali (lavori, eventi veri del comune, ordinanze reali).
+4. Le notizie devono essere brevi: massimo 2 frasi per "content".`;
+
+    const prompt = `Genera le notizie locali per la zona: ${zona}`;
+
+    try {
+      const resp = await callAI(prompt, system);
+      const cleaned = resp.replace(/```json/gi, '').replace(/```/g, '').trim();
+      return JSON.parse(cleaned);
+    } catch (e) {
+      console.error("News Generation Error:", e);
+      return [
+        { title: "Servizio Non Disponibile", content: "Impossibile caricare le notizie locali al momento.", date: "Ora" }
+      ];
+    }
+  },
+
+  async analyzeBolletta(imageBase64: string, mimeType: string): Promise<{ consumo: number | null; importo: number | null; periodo: string | null }> {
+    const VISION_MODEL = 'meta-llama/llama-3.2-11b-vision-instruct:free';
+    const system = `Sei un analizzatore OCR di bollette energetiche italiane. Estrai i dati dalla bolletta e rispondi SOLO con JSON valido, nessun testo extra.
+Formato: {"consumo_kwh": <numero o null>, "importo_euro": <numero o null>, "periodo": "<stringa mese/anno o null>"}
+Se non riesci a estrarre un valore, usa null.`;
+
+    try {
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OR_KEY}` },
+        body: JSON.stringify({
+          model: VISION_MODEL,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: system },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${imageBase64}` } }
+            ]
+          }]
+        })
+      });
+      if (!res.ok) throw new Error(`Vision API error: ${res.status}`);
+      const data = await res.json();
+      const raw = data.choices[0].message.content.replace(/```json|```/gi, '').trim();
+      const parsed = JSON.parse(raw);
+      return { consumo: parsed.consumo_kwh ?? null, importo: parsed.importo_euro ?? null, periodo: parsed.periodo ?? null };
+    } catch (e) {
+      console.error('OCR bolletta error:', e);
+      return { consumo: null, importo: null, periodo: null };
+    }
+  },
+
+  async analyzeHomeDevice(deviceText: string, query: string): Promise<string> {
+    const system = `Sei "Treedoo Home Assistant", un tecnico domotico e riparatore specializzato con conoscenza assoluta di tutti i manuali d'uso.
+Sfrutta la tua conoscenza reale per capire esattamente di quale dispositivo, marca o modello sta parlando l'utente.
+    
+REGOLE TASSATIVE:
+1. Rispondi in modo iper-tecnico ma comprensibile (step-by-step). Cita funzioni reali del modello o significati reali dei codici d'errore se li conosci.
+2. L'utente ha inserito informazioni sull'oggetto e ti farà una domanda.
+3. Fornisci la soluzione pratica, esatta e sicura.
+4. Sintesi: Massimo 4-5 frasi o un breve elenco numerato. Non dilungarti.`;
+
+    const prompt = `Dispositivo fornito: "${deviceText}". Domanda dell'utente: "${query}". Rispondi fornendo la soluzione.`;
+    
+    try {
+      return await callAI(prompt, system);
+    } catch (e) {
+      console.error("Domotica Error:", e);
+      return "Errore di connessione all'assistente domotico. Riprova più tardi.";
     }
   }
 };

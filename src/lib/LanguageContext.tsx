@@ -31,7 +31,17 @@ const dictionary: Dictionary = {
   home: { IT: "Home", EN: "Home" },
   neighborhood: { IT: "Vicinato", EN: "Community" },
   services: { IT: "Servizi", EN: "Services" },
-  contact_admin: { IT: "COMUNICA CON AMMINISTRATORE", EN: "CONTACT ADMIN" }
+  contact_admin: { IT: "COMUNICA CON AMMINISTRATORE", EN: "CONTACT ADMIN" },
+  my_residences: { IT: "Le mie case", EN: "My residences" },
+  change_house: { IT: "Cambia casa", EN: "Change house" },
+  auto_switch: { IT: "Cambio automatico (GPS)", EN: "Auto-switch (GPS)" },
+  settings: { IT: "Impostazioni", EN: "Settings" },
+  language: { IT: "Lingua", EN: "Language" },
+  add_residence: { IT: "Aggiungi casa", EN: "Add home" },
+  enter_address: { IT: "Inserisci indirizzo", EN: "Enter address" },
+  enter_interior: { IT: "Interno (es. 3A)", EN: "Interior (e.g. 3A)" },
+  confirm: { IT: "Conferma", EN: "Confirm" },
+  cancel: { IT: "Annulla", EN: "Cancel" }
 };
 
 interface LanguageContextType {

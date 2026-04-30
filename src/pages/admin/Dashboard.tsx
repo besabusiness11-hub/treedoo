@@ -3,23 +3,26 @@ import { Button } from "@/components/ui/button"
 import { CalendarClock, AlertTriangle, FileText, Send, Sparkles, LogOut, PieChart, Edit3, ShieldCheck } from "lucide-react"
 import { Link } from "react-router-dom"
 
-import React, { useState, useEffect } from "react"
+import React, { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { useData } from "@/lib/DataContext"
+import { useAuth } from "@/lib/AuthContext"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ollamaService } from "@/lib/ollama"
 import { Loader2 } from "lucide-react"
 
 export default function AdminDashboard() {
-  const [dbUser, setDbUser] = useState<any>(null);
-  useEffect(() => {
-    const saved = localStorage.getItem('treedoo_user');
-    if (saved) setDbUser(JSON.parse(saved));
-  }, []);
+  const navigate = useNavigate()
+  const { user: dbUser, logout } = useAuth();
 
   const { data, addScadenza, resolveTicket, addPost, addBilancio, setRegolamento, addVerbale } = useData();
   const [newScadenzaTitle, setNewScadenzaTitle] = useState("");
   const [newScadenzaAmount, setNewScadenzaAmount] = useState("");
+  const [newScadenzaDate, setNewScadenzaDate] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 1);
+    return d.toISOString().split('T')[0]; // default: next month ISO
+  });
   const [newAvvisoTitle, setNewAvvisoTitle] = useState("");
   const [isGeneratingAvviso, setIsGeneratingAvviso] = useState(false);
   
@@ -31,11 +34,13 @@ export default function AdminDashboard() {
   const handleAddScadenza = (e: React.FormEvent) => {
     e.preventDefault();
     if (newScadenzaTitle && newScadenzaAmount) {
+      const d = new Date(newScadenzaDate);
       addScadenza({
         title: newScadenzaTitle,
         amount: parseFloat(newScadenzaAmount),
-        dateStr: new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }),
-        month: new Date().toLocaleDateString('it-IT', { month: 'long' }),
+        dateStr: d.toLocaleDateString('it-IT'),
+        due_date: newScadenzaDate, // ISO format for API
+        month: d.toLocaleDateString('it-IT', { month: 'long' }),
         condominio: "Tutti",
       });
       setNewScadenzaTitle("");
@@ -47,7 +52,7 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (newAvvisoTitle) {
       addPost({
-        author: dbUser?.name || "Amministratore",
+        author: (dbUser as any)?.name || "Amministratore",
         content: newAvvisoTitle,
         isAvviso: true,
       });
@@ -72,7 +77,7 @@ export default function AdminDashboard() {
   const handlePublishDoc = (e: React.FormEvent) => {
     e.preventDefault();
     if (!docTitle || !docContent) return;
-    const author = dbUser?.name || "Amministratore";
+    const author = (dbUser as any)?.name || "Amministratore";
     
     if (activeDocTab === "bilancio") {
       addBilancio({ title: docTitle, content: docContent, author });
@@ -86,7 +91,8 @@ export default function AdminDashboard() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('treedoo_user');
+    logout();
+    navigate('/');
   };
 
   return (
@@ -97,9 +103,9 @@ export default function AdminDashboard() {
           <p className="text-[11px] text-[#a5cdb0] font-bold mb-0.5 uppercase tracking-wide">Benvenuto, {dbUser?.name?.split(' ')[0] || "Amministratore"}</p>
           <h1 className="text-xl font-bold tracking-tight"><span className="text-black">tree</span><span className="text-[#4ade80]">doo</span> <span className="font-light text-[#a5cdb0] text-sm ml-2">ADMIN</span></h1>
         </div>
-        <Link to="/" onClick={handleLogout} className="text-[#a5cdb0] hover:text-white transition-colors">
+        <button onClick={handleLogout} className="text-[#a5cdb0] hover:text-white transition-colors">
           <LogOut className="w-5 h-5" />
-        </Link>
+        </button>
       </header>
 
       <main className="max-w-7xl mx-auto p-4 lg:p-8 space-y-8 mt-4 animate-in fade-in duration-500">
@@ -187,12 +193,19 @@ export default function AdminDashboard() {
                     className="bg-white border-emerald-100 focus-visible:ring-emerald-500"
                     required
                   />
-                  <Input 
-                    type="number" 
-                    step="0.01" 
-                    placeholder="Importo (es. 45.50)" 
-                    value={newScadenzaAmount} 
-                    onChange={(e) => setNewScadenzaAmount(e.target.value)} 
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="Importo (es. 45.50)"
+                    value={newScadenzaAmount}
+                    onChange={(e) => setNewScadenzaAmount(e.target.value)}
+                    className="bg-white border-emerald-100 focus-visible:ring-emerald-500"
+                    required
+                  />
+                  <Input
+                    type="date"
+                    value={newScadenzaDate}
+                    onChange={(e) => setNewScadenzaDate(e.target.value)}
                     className="bg-white border-emerald-100 focus-visible:ring-emerald-500"
                     required
                   />
