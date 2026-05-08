@@ -250,7 +250,7 @@ export default function Welcome() {
                       </ul>
                     </div>
                   </div>
-                  <div className="mt-8 pb-safe">
+                  <div className="mt-8 pb-safe space-y-3">
                     <button onClick={() => setStep("role")} className="flex items-center justify-center gap-2 w-full bg-slate-900 hover:bg-slate-800 text-white h-14 rounded-2xl font-bold text-sm shadow-xl shadow-slate-900/20 transition-all active:scale-95 whitespace-nowrap px-4">
                       <div className="flex items-center gap-1.5 mr-1">
                         <span className="text-slate-400 text-xs font-medium">1... 2...</span>
@@ -259,6 +259,9 @@ export default function Welcome() {
                       <span className="w-[1px] h-4 bg-slate-700 hidden sm:block" />
                       <span>INIZIAMO</span>
                       <ArrowRight className="w-5 h-5 opacity-80 shrink-0" />
+                    </button>
+                    <button onClick={() => { setFormError(""); setStep("login"); }} className="w-full h-11 rounded-2xl bg-gray-100 text-slate-500 font-bold text-sm hover:bg-gray-200 transition-all">
+                      Ho già un account → Accedi
                     </button>
                   </div>
                 </motion.div>

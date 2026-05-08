@@ -14,7 +14,7 @@ const app = express()
 const PORT = process.env.PORT || 4000
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-app.use(cors({ origin: 'http://localhost:3000', credentials: true }))
+app.use(cors({ origin: /^http:\/\/localhost:\d+$/, credentials: true }))
 app.use(express.json())
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 
